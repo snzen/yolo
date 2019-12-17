@@ -27,7 +27,7 @@ hyp = {'giou': 3.31,  # giou loss gain
        'obj': 52.0,  # obj loss gain (*=img_size/320 if img_size != 320)
        'obj_pw': 1.0,  # obj BCELoss positive_weight
        'iou_t': 0.213,  # iou training threshold
-       'lr0': 0.00261,  # initial learning rate (SGD=1E-3, Adam=9E-5)
+       'lr0': 0.0002,  
        'lrf': -4.,  # final LambdaLR learning rate = lr0 * (10 ** lrf)
        'momentum': 0.949,  # SGD momentum
        'weight_decay': 0.000489,  # optimizer weight decay
@@ -46,6 +46,11 @@ if f:
     for k, v in zip(hyp.keys(), np.loadtxt(f[0])):
         hyp[k] = v
 
+# From slimyolov3/sparsity/py
+def updateBN(scale, model):
+    for m in model.modules():
+        if isinstance(m, nn.BatchNorm2d):
+            m.weight.grad.data.add_(scale*torch.sign(m.weight.data))  # L1
 
 def train():
     cfg = opt.cfg
@@ -286,6 +291,7 @@ def train():
 
             # Accumulate gradient for x batches before optimizing
             if ni % accumulate == 0:
+                updateBN(0.0001, model)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -415,7 +421,7 @@ if __name__ == '__main__':
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--img-weights', action='store_true', help='select training images by weight')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='weights/ultralytics49.pt', help='initial weights')
+    parser.add_argument('--weights', type=str, default='', help='initial weights')
     parser.add_argument('--arc', type=str, default='default', help='yolo architecture')  # defaultpw, uCE, uBCE
     parser.add_argument('--prebias', action='store_true', help='transfer-learn yolo biases prior to training')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
