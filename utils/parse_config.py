@@ -9,6 +9,7 @@ def parse_model_cfg(path):
     lines = [x.rstrip().lstrip() for x in lines]  # get rid of fringe whitespaces
     mdefs = []  # module definitions
     for line in lines:
+        print(line)
         if line.startswith('['):  # This marks the start of a new block
             mdefs.append({})
             mdefs[-1]['type'] = line[1:-1].rstrip()

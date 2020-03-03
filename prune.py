@@ -89,7 +89,15 @@ def write_model_cfg(old_path, new_path, new_module_defs):
             lines.append("size={}\n\n".format(module_def['size']))
         elif mtype == 'yolo':
             lines.append("mask = {}\n".format(module_def['mask']))
-            lines.append("anchors = {}\n".format(module_def['anchors']))
+            # lines.append("anchors = {}\n".format(module_def['anchors']))
+
+            anch = ""
+            for a in module_def['anchors']:
+                anch += "{}, {}, ".format(int(a[0]),int(a[1]))
+            anch = anch[:-2]
+            lines.append("anchors = {}\n".format(anch))
+
+
             lines.append("classes = {}\n".format(module_def['classes']))
             lines.append("num = {}\n".format(module_def['num']))
             lines.append("jitter = {}\n".format(module_def['jitter']))
@@ -157,7 +165,8 @@ def test(
         if mtype  == 'convolutional':
             bn = int(module_def['batch_normalize'])
             if bn:
-                m = getattr(module, 'batch_norm_%d' % i) # batch_norm layer
+                m = getattr(module, 'BatchNorm2d') # batch_norm layer
+                #  m = getattr(module, 'batch_norm_%d' % i) # batch_norm layer
                 weight_copy = m.weight.data.abs().clone()
                 channels = weight_copy.shape[0] #
                 min_channel_num = int(channels * perlayer_ratio) if int(channels * perlayer_ratio) > 0 else 1
@@ -275,11 +284,11 @@ def test(
         if mtype  == 'convolutional': # 
             bn = int(module_def['batch_normalize'])
             if bn:
-                new_norm = getattr(new_module, 'batch_norm_%d' % i) # batch_norm layer
-                old_norm = getattr(old_module, 'batch_norm_%d' % i) # batch_norm layer
+                new_norm = getattr(new_module, 'BatchNorm2d') # batch_norm layer
+                old_norm = getattr(old_module, 'BatchNorm2d') # batch_norm layer
 
-                new_conv = getattr(new_module, 'conv_%d' % i) # conv layer
-                old_conv = getattr(old_module, 'conv_%d' % i) # conv layer  
+                new_conv = getattr(new_module, 'Conv2d') # conv layer
+                old_conv = getattr(old_module, 'Conv2d') # conv layer  
                 
 
                 idx1 = np.squeeze(np.argwhere(np.asarray(module_def['mask'].cpu().numpy())))
@@ -300,8 +309,8 @@ def test(
                 print('layer index: ', i, 'idx1: ', idx1)     
             else: 
 
-                new_conv = getattr(new_module, 'conv_%d' % i) # batch_norm layer
-                old_conv = getattr(old_module, 'conv_%d' % i) # batch_norm layer
+                new_conv = getattr(new_module, 'Conv2d') # batch_norm layer
+                old_conv = getattr(old_module, 'Conv2d') # batch_norm layer
                 idx2 = np.squeeze(np.argwhere(np.asarray(proned_module_defs[i-1]['mask'].cpu().numpy())))
                 new_conv.weight.data = old_conv.weight.data[:,idx2.tolist(),:,:].clone()
                 new_conv.bias.data = old_conv.bias.data.clone()
@@ -316,7 +325,7 @@ def test(
 
     print("Done!") 
 
-
+    return 
 
     # test
     pruned_model.eval()

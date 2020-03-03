@@ -402,7 +402,11 @@ def convert(cfg='cfg/yolov3-spp.cfg', weights='weights/yolov3-spp.weights'):
 
     # Load weights and save
     if weights.endswith('.pt'):  # if PyTorch format
-        model.load_state_dict(torch.load(weights, map_location='cpu')['model'])
+        M = torch.load(weights, map_location='cpu')
+        if hasattr(M, "model"):
+            model.load_state_dict(M["model"])
+        else:
+            model.load_state_dict(M)
         save_weights(model, path='converted.weights', cutoff=-1)
         print("Success: converted '%s' to 'converted.weights'" % weights)
 
