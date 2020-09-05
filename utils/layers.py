@@ -8,7 +8,6 @@ def make_divisible(v, divisor):
     # https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet.py
     return math.ceil(v / divisor) * divisor
 
-
 class Flatten(nn.Module):
     # Use after nn.AdaptiveAvgPool2d(1) to remove last 2 dimensions
     def forward(self, x):
@@ -33,6 +32,18 @@ class FeatureConcat(nn.Module):
 
     def forward(self, x, outputs):
         return torch.cat([outputs[i] for i in self.layers], 1) if self.multiple else outputs[self.layers[0]]
+
+class FeatureConcatSlice(nn.Module):
+    def __init__(self, layers, cfrom, length):
+        super(FeatureConcatSlice, self).__init__()
+        self.layers = layers  # layer indices
+        self.multiple = len(layers) > 1  # multiple layers flag\
+        self.cfrom = cfrom
+        self.length = length
+
+    def forward(self, x, outputs):
+        x = torch.cat([outputs[i] for i in self.layers], 1) if self.multiple else outputs[self.layers[0]]
+        return  torch.narrow(x, 1, self.cfrom, self.length)
 
 
 class WeightedFeatureFusion(nn.Module):  # weighted sum of 2 or more layers https://arxiv.org/abs/1911.09070

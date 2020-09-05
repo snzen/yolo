@@ -2,7 +2,7 @@ from utils.google_utils import *
 from utils.layers import *
 from utils.parse_config import *
 
-ONNX_EXPORT = False
+ONNX_EXPORT = True
 
 
 def create_modules(module_defs, img_size, cfg):
@@ -23,12 +23,16 @@ def create_modules(module_defs, img_size, cfg):
             filters = mdef['filters']
             k = mdef['size']  # kernel size
             stride = mdef['stride'] if 'stride' in mdef else (mdef['stride_y'], mdef['stride_x'])
+            padding = mdef['padding']
+            if not padding:
+                padding = k // 2 if 'pad' in mdef else 0
+
             if isinstance(k, int):  # single-size conv
                 modules.add_module('Conv2d', nn.Conv2d(in_channels=output_filters[-1],
                                                        out_channels=filters,
                                                        kernel_size=k,
                                                        stride=stride,
-                                                       padding=k // 2 if mdef['pad'] else 0,
+                                                       padding=padding,
                                                        groups=mdef['groups'] if 'groups' in mdef else 1,
                                                        bias=not bn))
             else:  # multiple-size conv
@@ -77,9 +81,21 @@ def create_modules(module_defs, img_size, cfg):
 
         elif mdef['type'] == 'route':  # nn.Sequential() placeholder for 'route' layer
             layers = mdef['layers']
+            groups = mdef['groups'] if 'groups' in mdef else 1
+            group_id = mdef['group_id'] if 'group_id' in mdef else 0
             filters = sum([output_filters[l + 1 if l > 0 else l] for l in layers])
             routs.extend([i + l if l < 0 else l for l in layers])
-            modules = FeatureConcat(layers=layers)
+
+            if groups < 1:
+                groups = 1
+
+            if group_id < 0:
+                group_id = 0
+
+            group_size = filters / groups
+            cfrom = int(group_id * group_size)
+            filters = int(filters / groups)
+            modules = FeatureConcatSlice(layers, cfrom, int(group_size))
 
         elif mdef['type'] == 'shortcut':  # nn.Sequential() placeholder for 'shortcut' layer
             layers = mdef['from']
@@ -280,7 +296,7 @@ class Darknet(nn.Module):
 
         for i, module in enumerate(self.module_list):
             name = module.__class__.__name__
-            if name in ['WeightedFeatureFusion', 'FeatureConcat']:  # sum, concat
+            if name in ['WeightedFeatureFusion', 'FeatureConcat', 'FeatureConcatSlice']:  # sum, concat
                 if verbose:
                     l = [i - 1] + module.layers  # layers
                     sh = [list(x.shape)] + [list(out[i].shape) for i in module.layers]  # shapes
@@ -438,7 +454,7 @@ def convert(cfg='cfg/yolov3-spp.cfg', weights='weights/yolov3-spp.weights'):
 
         target = weights.rsplit('.', 1)[0] + '.pt'
         torch.save(chkpt, target)
-        print("Success: converted '%s' to '%'" % (weights, target))
+        print("Success: converted" )
 
     else:
         print('Error: extension not supported.')

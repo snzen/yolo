@@ -1,3 +1,3 @@
 from models import *
 
-convert('C:\\github\\yolov3\\prune_0.5_0.1\\prune.cfg', 'C:\\github\\yolov3\\prune_0.5_0.1\\prune.pt')
+convert('C:\\Models\\WRCRSB\\WRCR-slim-balanced.cfg', 'C:\\Models\\WRCRSB\\WRCR-slim-balanced_best.weights')
