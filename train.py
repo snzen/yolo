@@ -32,7 +32,7 @@ hyp = {'giou': 3.54,  # giou loss gain
        'lr0': 0.01,  # initial learning rate (SGD=5E-3, Adam=5E-4)
        'lrf': 0.0005,  # final learning rate (with cos scheduler)
        'momentum': 0.937,  # SGD momentum
-       'weight_decay': 0.000484,  # optimizer weight decay
+       'weight_decay': 0.0005,  # optimizer weight decay
        'fl_gamma': 0.0,  # focal loss gamma (efficientDet default is gamma=1.5)
        'hsv_h': 0.0138,  # image HSV-Hue augmentation (fraction)
        'hsv_s': 0.678,  # image HSV-Saturation augmentation (fraction)
@@ -64,7 +64,7 @@ def train(hyp):
     imgsz_min, imgsz_max, imgsz_test = opt.img_size  # img sizes (min, max, test)
 
     # Image Sizes
-    gs = 64  # (pixels) grid size
+    gs = 32  # (pixels) grid size
     assert math.fmod(imgsz_min, gs) == 0, '--img-size %g must be a %g-multiple' % (imgsz_min, gs)
     opt.multi_scale |= imgsz_min != imgsz_max  # multi if different (min, max)
     if opt.multi_scale:
@@ -116,33 +116,48 @@ def train(hyp):
     attempt_download(weights)
     if weights.endswith('.pt'):  # pytorch format
         # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-        chkpt = torch.load(weights, map_location=device)
+        ckpt = torch.load(weights, map_location=device)
 
         # load model
         try:
-            chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(chkpt['model'], strict=False)
+            ckpt['model'] = {k: v for k, v in ckpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+            model.load_state_dict(ckpt['model'], strict=False)
         except KeyError as e:
             s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
             raise KeyError(s) from e
 
         # load optimizer
-        if chkpt['optimizer'] is not None:
-            optimizer.load_state_dict(chkpt['optimizer'])
-            best_fitness = chkpt['best_fitness']
+        if ckpt['optimizer'] is not None:
+            optimizer.load_state_dict(ckpt['optimizer'])
+            best_fitness = ckpt['best_fitness']
 
         # load results
-        if chkpt.get('training_results') is not None:
+        if ckpt.get('training_results') is not None:
             with open(results_file, 'w') as file:
-                file.write(chkpt['training_results'])  # write results.txt
+                file.write(ckpt['training_results'])  # write results.txt
 
-        start_epoch = chkpt['epoch'] + 1
-        del chkpt
+        # epochs
+        start_epoch = ckpt['epoch'] + 1
+        if epochs < start_epoch:
+            print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
+                  (opt.weights, ckpt['epoch'], epochs))
+            epochs += ckpt['epoch']  # finetune additional epochs
+
+        del ckpt
 
     elif len(weights) > 0:  # darknet format
         # possible weights are '*.weights', 'yolov3-tiny.conv.15',  'darknet53.conv.74' etc.
         load_darknet_weights(model, weights)
+
+    if opt.freeze_layers:
+        output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if isinstance(module, YOLOLayer)]
+        freeze_layer_indices = [x for x in range(len(model.module_list)) if
+                                (x not in output_layer_indices) and
+                                (x - 1 not in output_layer_indices)]
+        for idx in freeze_layer_indices:
+            for parameter in model.module_list[idx].parameters():
+                parameter.requires_grad_(False)
 
     # Mixed precision training https://github.com/NVIDIA/apex
     if mixed_precision:
@@ -240,16 +255,16 @@ def train(hyp):
             targets = targets.to(device)
 
             # Burn-in
-            if ni <= n_burn * 2:
-                model.gr = np.interp(ni, [0, n_burn * 2], [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
-                if ni == n_burn:  # burnin complete
-                    print_model_biases(model)
-
+            if ni <= n_burn:
+                xi = [0, n_burn]  # x interp
+                model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
+                accumulate = max(1, np.interp(ni, xi, [1, 64 / batch_size]).round())
                 for j, x in enumerate(optimizer.param_groups):
                     # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    x['lr'] = np.interp(ni, [0, n_burn], [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                    x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                    x['weight_decay'] = np.interp(ni, xi, [0.0, hyp['weight_decay'] if j == 1 else 0.0])
                     if 'momentum' in x:
-                        x['momentum'] = np.interp(ni, [0, n_burn], [0.9, hyp['momentum']])
+                        x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
 
             # Multi-Scale
             if opt.multi_scale:
@@ -310,11 +325,12 @@ def train(hyp):
             results, maps = test.test(cfg,
                                       data,
                                       batch_size=batch_size,
-                                      img_size=imgsz_test,
+                                      imgsz=imgsz_test,
                                       model=ema.ema,
                                       save_json=final_epoch and is_coco,
                                       single_cls=opt.single_cls,
-                                      dataloader=testloader)
+                                      dataloader=testloader,
+                                      multi_label=ni > n_burn)
 
         # Write
         with open(results_file, 'a') as f:
@@ -339,17 +355,17 @@ def train(hyp):
         save = (not opt.nosave) or (final_epoch and not opt.evolve)
         if save:
             with open(results_file, 'r') as f:  # create checkpoint
-                chkpt = {'epoch': epoch,
-                         'best_fitness': best_fitness,
-                         'training_results': f.read(),
-                         'model': ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
-                         'optimizer': None if final_epoch else optimizer.state_dict()}
+                ckpt = {'epoch': epoch,
+                        'best_fitness': best_fitness,
+                        'training_results': f.read(),
+                        'model': ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
+                        'optimizer': None if final_epoch else optimizer.state_dict()}
 
             # Save last, best and delete
-            torch.save(chkpt, last)
+            torch.save(ckpt, last)
             if (best_fitness == fi) and not final_epoch:
-                torch.save(chkpt, best)
-            del chkpt
+                torch.save(ckpt, best)
+            del ckpt
 
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
@@ -393,9 +409,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--freeze-layers', action='store_true', help='Freeze non-output layers')
     opt = parser.parse_args()
-    opt.weights = last if opt.resume else opt.weights
+    opt.weights = last if opt.resume and not opt.weights else opt.weights
     check_git_status()
+    opt.cfg = check_file(opt.cfg)  # check file
+    opt.data = check_file(opt.data)  # check file
     print(opt)
     opt.img_size.extend([opt.img_size[-1]] * (3 - len(opt.img_size)))  # extend to 3 sizes (min, max, test)
     device = torch_utils.select_device(opt.device, apex=mixed_precision, batch_size=opt.batch_size)
