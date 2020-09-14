@@ -275,7 +275,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             raise Exception('Error loading data from %s. See %s' % (path, help_url))
 
         n = len(self.img_files)
-        assert n > 0, 'No images found in %s. See %s' % (path, help_url)
+        # assert n > 0, 'No images found in %s. See %s' % (path, help_url)
         bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
         nb = bi[-1] + 1  # number of batches
 
@@ -289,7 +289,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
 
         # Define labels
-        self.label_files = [x.replace('images', 'labels').replace(os.path.splitext(x)[-1], '.txt')
+        self.label_files = [x.replace(os.path.splitext(x)[-1], '.txt')
                             for x in self.img_files]
 
         # Read image shapes (wh)
@@ -340,7 +340,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 self.labels = x
                 labels_loaded = True
         else:
-            s = path.replace('images', 'labels')
+            s = path.replace('.jpg', '.txt')
 
         pbar = tqdm(self.label_files)
         for i, file in enumerate(pbar):

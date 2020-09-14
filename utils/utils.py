@@ -35,14 +35,6 @@ def init_seeds(seed=0):
     torch_utils.init_seeds(seed=seed)
 
 
-def check_git_status():
-    if platform in ['linux', 'darwin']:
-        # Suggest 'git pull' if repo is out of date
-        s = subprocess.check_output('if [ -d .git ]; then git fetch && git status -uno; fi', shell=True).decode('utf-8')
-        if 'Your branch is behind' in s:
-            print(s[s.find('Your branch is behind'):s.find('\n\n')] + '\n')
-
-
 def check_file(file):
     # Searches for file if not found locally
     if os.path.isfile(file):
@@ -363,11 +355,6 @@ def compute_loss(p, targets, model):  # predictions, targets, model
 
     # class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
     cp, cn = smooth_BCE(eps=0.0)
-
-    # focal loss
-    g = h['fl_gamma']  # focal loss gamma
-    if g > 0:
-        BCEcls, BCEobj = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g)
 
     # per output
     nt = 0  # targets
