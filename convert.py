@@ -1,3 +1,3 @@
 from models import *
 
-convert('C:\\Models\\WRCRSB\\WRCR-slim-balanced.cfg', 'C:\\Models\\WRCRSB\\WRCR-slim-balanced_best.weights')
+convert('D:\\Train\\Pytorch\\T1109\\WRCRSB.cfg', 'D:\\Train\\Pytorch\\T1109\\weights\\last.pt')

@@ -227,8 +227,7 @@ def train(hyp):
 
     # Start training
     nb = len(dataloader)  # number of batches
-    # burn-in iterations, max(3 epochs, 500 iterations)
-    n_burn = max(3 * nb, 500)
+    n_burn = 200
     maps = np.zeros(nc)  # mAP per class
     # torch.autograd.set_detect_anomaly(True)
 
