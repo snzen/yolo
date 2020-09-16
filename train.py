@@ -179,8 +179,8 @@ def train(hyp):
 
     # Dataset
     dataset = LoadImagesAndLabels(
-        train_path, 
-        img_size, 
+        train_path,
+        img_size,
         batch_size,
         augment=True,
         hyp=hyp,  # augmentation hyperparameters
@@ -373,7 +373,7 @@ def train(hyp):
             best_fitness = fi
 
         # Save model
-        save = (not opt.nosave) or (final_epoch and not opt.evolve)
+        save = (not opt.nosave) and (epoch % 4 == 0) or (final_epoch and not opt.evolve)
         if save:
             with open(results_file, 'r') as f:  # create checkpoint
                 ckpt = {'epoch': epoch,
@@ -384,6 +384,8 @@ def train(hyp):
 
             # Save last, best and delete
             torch.save(ckpt, last)
+            torch.save(ckpt, wdir + str(epoch) + '.pt')
+
             if (best_fitness == fi) and not final_epoch:
                 torch.save(ckpt, best)
             del ckpt
@@ -417,7 +419,7 @@ def train(hyp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    
+
     # 500200 batches at bs 16, 117263 COCO images = 273 epochs
     parser.add_argument('--epochs', type=int, default=300)
     # effective bs = batch_size * accumulate = 16 * 4 = 64

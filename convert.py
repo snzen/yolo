@@ -1,3 +1,10 @@
 from models import *
+import argparse
 
-convert('D:\\Train\\Pytorch\\T1109\\WRCRSB.cfg', 'D:\\Train\\Pytorch\\T1109\\weights\\last.pt')
+parser = argparse.ArgumentParser()
+parser.add_argument('--cfg', type=str, help='Darknet cfg')
+parser.add_argument('--pt', type=str, help='.pt files')
+opt = parser.parse_args()
+
+
+convert(opt.cfg, opt.pt)
