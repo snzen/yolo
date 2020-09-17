@@ -10,6 +10,10 @@ from models import *
 from utils.datasets import *
 from utils.utils import *
 
+import subprocess
+from multiprocessing import Process
+from subprocess import Popen, CREATE_NEW_CONSOLE
+
 wdir = 'weights' + os.sep  # weights dir
 last = wdir + 'last.pt'
 best = wdir + 'best.pt'
@@ -40,6 +44,19 @@ if f:
     print('Using %s' % f[0])
     for k, v in zip(hyp.keys(), np.loadtxt(f[0])):
         hyp[k] = v
+
+
+def gen(genIdx, root_path):
+    p = None
+    if genIdx == 1:
+        p = subprocess.Popen("bbox gen " + root_path + "gen1.json", shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=CREATE_NEW_CONSOLE)
+        # subprocess.run(["bbox", "gen", root_path + os.sep + "gen1.json"])
+        genIdx = 2
+    else:
+        p = subprocess.Popen("bbox gen " + root_path + "gen2.json", shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=CREATE_NEW_CONSOLE)
+        genIdx = 1
+
+    return (p, genIdx)
 
 
 def train(hyp):
@@ -73,6 +90,7 @@ def train(hyp):
     data_dict = parse_data_cfg(data)
     train_path = data_dict['train']
     test_path = data_dict['valid']
+    root = data_dict['root']
     nc = 1 if opt.single_cls else int(
         data_dict['classes'])  # number of classes
     hyp['cls'] *= nc / 80  # update coco-tuned hyp['cls'] to current dataset
@@ -240,8 +258,36 @@ def train(hyp):
     print('Using %g dataloader workers' % nw)
     print('Starting training for %g epochs...' % epochs)
 
+    genIdx = 2
+    genProc, genIdx = gen(genIdx, root)
+
     for epoch in range(start_epoch, epochs):
         model.train()
+
+        # Gen images
+        if epoch > 0 and epoch % 2 == 0:
+            genProc.wait()
+            genpath = root + "gen" + str((genIdx % 2)+1)
+
+            dataset = LoadImagesAndLabels(
+                genpath,
+                img_size,
+                batch_size,
+                augment=True,
+                hyp=hyp,  # augmentation hyperparameters
+                rect=opt.rect,  # rectangular training
+                cache_images=opt.cache_images,
+                single_cls=opt.single_cls)
+
+            dataloader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=batch_size,
+                num_workers=nw,
+                shuffle=not opt.rect,  # Shuffle=True unless rectangular training is used
+                pin_memory=True,
+                collate_fn=dataset.collate_fn)
+
+            genProc, genIdx = gen(genIdx, root)
 
         # Update image weights (optional)
         if dataset.image_weights:
