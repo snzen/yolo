@@ -332,15 +332,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.labels = [np.zeros((0, 5), dtype=np.float32)] * n
         create_datasubset, extract_bounding_boxes, labels_loaded = False, False, False
         nm, nf, ne, ns, nd = 0, 0, 0, 0, 0  # number missing, found, empty, datasubset, duplicate
-        np_labels_path = str(Path(self.label_files[0]).parent) + '.npy'  # saved labels in *.npy file
-        if os.path.isfile(np_labels_path):
-            s = np_labels_path  # print string
-            x = np.load(np_labels_path, allow_pickle=True)
-            if len(x) == n:
-                self.labels = x
-                labels_loaded = True
-        else:
-            s = path.replace('.jpg', '.txt')
+
+        # np_labels_path = str(Path(self.label_files[0]).parent) + '.npy'  # saved labels in *.npy file
+        # if os.path.isfile(np_labels_path):
+        #     s = np_labels_path  # print string
+        #     x = np.load(np_labels_path, allow_pickle=True)
+        #     if len(x) == n:
+        #         self.labels = x
+        #         labels_loaded = True
+        # else:
+        #     s = path.replace('.jpg', '.txt')
+    
+        s = path.replace('.jpg', '.txt')
 
         pbar = tqdm(self.label_files)
         for i, file in enumerate(pbar):
@@ -403,9 +406,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             pbar.desc = 'Caching labels %s (%g found, %g missing, %g empty, %g duplicate, for %g images)' % (
                 s, nf, nm, ne, nd, n)
         assert nf > 0 or n == 20288, 'No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
-        if not labels_loaded and n > 1000:
-            print('Saving labels to %s for faster future loading' % np_labels_path)
-            np.save(np_labels_path, self.labels)  # save for next time
+        # if not labels_loaded and n > 1000:
+        #     print('Saving labels to %s for faster future loading' % np_labels_path)
+        #     np.save(np_labels_path, self.labels)  # save for next time
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         if cache_images:  # if training

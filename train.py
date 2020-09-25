@@ -14,6 +14,9 @@ import subprocess
 from multiprocessing import Process
 from subprocess import Popen, CREATE_NEW_CONSOLE
 
+GEN_STEP = 10
+USE_GEN = False
+
 wdir = 'weights' + os.sep  # weights dir
 last = wdir + 'last.pt'
 best = wdir + 'best.pt'
@@ -49,11 +52,11 @@ if f:
 def gen(genIdx, root_path):
     p = None
     if genIdx == 1:
-        p = subprocess.Popen("bbox gen " + root_path + "gen1.json", shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=CREATE_NEW_CONSOLE)
+        p = subprocess.Popen("bbox gen " + root_path + "gen1.json", shell=False, stdout=None, stderr=None, creationflags=CREATE_NEW_CONSOLE)
         # subprocess.run(["bbox", "gen", root_path + os.sep + "gen1.json"])
         genIdx = 2
     else:
-        p = subprocess.Popen("bbox gen " + root_path + "gen2.json", shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=CREATE_NEW_CONSOLE)
+        p = subprocess.Popen("bbox gen " + root_path + "gen2.json", shell=False, stdout=None, stderr=None, creationflags=CREATE_NEW_CONSOLE)
         genIdx = 1
 
     return (p, genIdx)
@@ -64,6 +67,9 @@ def train(hyp):
     data = opt.data
     epochs = opt.epochs
     batch_size = opt.batch_size
+
+    SAVE_WEIGHTS_EVERY_N_EOPOCHS = int(epochs / 100)
+
     # accumulate n times before optimizer update (bs 64)
     accumulate = max(round(64 / batch_size), 1)
     weights = opt.weights  # initial training weights
@@ -210,7 +216,7 @@ def train(hyp):
     batch_size = min(batch_size, len(dataset))
 
     # number of workers
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])
+    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4])
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -258,14 +264,15 @@ def train(hyp):
     print('Using %g dataloader workers' % nw)
     print('Starting training for %g epochs...' % epochs)
 
-    genIdx = 2
-    genProc, genIdx = gen(genIdx, root)
+    if USE_GEN:
+        genIdx = 2
+        genProc, genIdx = gen(genIdx, root)
 
     for epoch in range(start_epoch, epochs):
         model.train()
 
         # Gen images
-        if epoch > 0 and epoch % 2 == 0:
+        if USE_GEN and epoch > 0 and epoch % GEN_STEP == 0:
             genProc.wait()
             genpath = root + "gen" + str((genIdx % 2)+1)
 
@@ -383,7 +390,7 @@ def train(hyp):
         # Process epoch results
         ema.update_attr(model)
         final_epoch = epoch + 1 == epochs
-        if not opt.notest or final_epoch:  # Calculate mAP
+        if not opt.notest or final_epoch: # and epoch % (GEN_STEP-1) == 0:  # Calculate mAP
             is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
             results, maps = test.test(
                 cfg,
@@ -419,7 +426,7 @@ def train(hyp):
             best_fitness = fi
 
         # Save model
-        save = (not opt.nosave) and (epoch % 4 == 0) or (final_epoch and not opt.evolve)
+        save = (not opt.nosave) and (epoch % SAVE_WEIGHTS_EVERY_N_EOPOCHS == 0) or (final_epoch and not opt.evolve)
         if save:
             with open(results_file, 'r') as f:  # create checkpoint
                 ckpt = {'epoch': epoch,
