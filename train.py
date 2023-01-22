@@ -15,7 +15,7 @@ from multiprocessing import Process
 from subprocess import Popen, CREATE_NEW_CONSOLE
 
 GEN_STEP = 10
-USE_GEN = False
+USE_GEN = True
 
 wdir = 'weights' + os.sep  # weights dir
 last = wdir + 'last.pt'
@@ -52,13 +52,12 @@ if f:
 def gen(genIdx, root_path):
     p = None
     if genIdx == 1:
-        p = subprocess.Popen("bbox gen " + root_path + "gen1.json", shell=False, stdout=None, stderr=None, creationflags=CREATE_NEW_CONSOLE)
-        # subprocess.run(["bbox", "gen", root_path + os.sep + "gen1.json"])
         genIdx = 2
     else:
-        p = subprocess.Popen("bbox gen " + root_path + "gen2.json", shell=False, stdout=None, stderr=None, creationflags=CREATE_NEW_CONSOLE)
         genIdx = 1
 
+    pn = "cclaunch.ps1 -LAUNCH " + str(genIdx)
+    p = subprocess.Popen(["powershell.exe", pn], cwd=root_path, shell=False, stdout=None, stderr=None, creationflags=CREATE_NEW_CONSOLE)
     return (p, genIdx)
 
 
@@ -191,14 +190,15 @@ def train(hyp):
     # https://discuss.pytorch.org/t/a-problem-occured-when-resuming-an-optimizer/28822
 
     # Initialize distributed training
-    if device.type != 'cpu' and torch.cuda.device_count() > 1 and torch.distributed.is_available():
-        dist.init_process_group(backend='nccl',  # 'distributed backend'
-                                init_method='tcp://127.0.0.1:9999',  # distributed training init method
-                                world_size=1,  # number of nodes for distributed training
-                                rank=0)  # distributed training node rank
-        model = torch.nn.parallel.DistributedDataParallel(
-            model, find_unused_parameters=True)
+    if "," in opt.device and torch.cuda.device_count() > 1 : #and torch.distributed.is_available():
+        # dist.init_process_group(backend='nccl',  # 'distributed backend'
+        #                         init_method='tcp://127.0.0.1:9999',  # distributed training init method
+        #                         world_size=1,  # number of nodes for distributed training
+        #                         rank=0)  # distributed training node rank
+        # model = torch.nn.parallel.DistributedDataParallel(
+        #     model, find_unused_parameters=True)
         # move yolo layer indices to top level
+        model = nn.DataParallel(model)
         model.yolo_layers = model.module.yolo_layers
 
     # Dataset
@@ -274,7 +274,7 @@ def train(hyp):
         # Gen images
         if USE_GEN and epoch > 0 and epoch % GEN_STEP == 0:
             genProc.wait()
-            genpath = root + "gen" + str((genIdx % 2)+1)
+            genpath = root + "A" if (genIdx % 2)==0 else "B"
 
             dataset = LoadImagesAndLabels(
                 genpath,
@@ -490,7 +490,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--weights', type=str, default='', help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
-    parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
+    parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true',  help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--freeze-layers', action='store_true', help='Freeze non-output layers')
@@ -511,6 +511,6 @@ if __name__ == '__main__':
     tb_writer = None
 
     if not opt.evolve:  # Train normally
-        print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-        tb_writer = SummaryWriter(comment=opt.name)
+        # print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
+        # tb_writer = SummaryWriter(comment=opt.name)
         train(hyp)

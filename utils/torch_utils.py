@@ -19,6 +19,7 @@ def init_seeds(seed=0):
 
 
 def select_device(device='', apex=False, batch_size=None):
+    return torch.device(device)
     # device = 'cpu' or '0' or '0,1,2,3'
     cpu_request = device.lower() == 'cpu'
     if device and not cpu_request:  # if device requested other than 'cpu'
@@ -42,8 +43,8 @@ def select_device(device='', apex=False, batch_size=None):
         print('Using CPU')
 
     print('')  # skip a line
-    return torch.device('cuda:0' if cuda else 'cpu')
-
+    # return torch.device('cuda:0' if cuda else 'cpu')
+    return torch.device('cuda' if cuda else 'cpu')
 
 def time_synchronized():
     torch.cuda.synchronize() if torch.cuda.is_available() else None
