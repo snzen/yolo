@@ -66,7 +66,7 @@ def labels_to_class_weights(labels, nc=80):
         return torch.Tensor()
 
     labels = np.concatenate(labels, 0)  # labels.shape = (866643, 5) for COCO
-    classes = labels[:, 0].astype(np.int)  # labels = [class xywh]
+    classes = labels[:, 0].astype(np.int_)  # labels = [class xywh]
     weights = np.bincount(classes, minlength=nc)  # occurences per class
 
     # Prepend gridpoint count (for uCE trianing)
@@ -82,7 +82,7 @@ def labels_to_class_weights(labels, nc=80):
 def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80)):
     # Produces image weights based on class mAPs
     n = len(labels)
-    class_counts = np.array([np.bincount(labels[i][:, 0].astype(np.int), minlength=nc) for i in range(n)])
+    class_counts = np.array([np.bincount(labels[i][:, 0].astype(np.int_), minlength=nc) for i in range(n)])
     image_weights = (class_weights.reshape(1, nc) * class_counts).sum(1)
     # index = random.choices(range(n), weights=image_weights, k=1)  # weight image sample
     return image_weights
@@ -181,11 +181,11 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
 
             # Recall
             recall = tpc / (n_gt + 1e-16)  # recall curve
-            r[ci] = np.interp(-pr_score, -conf[i], recall[:, 0])  # r at pr_score, negative x, xp because xp decreases
+            r[ci] = np.int_erp(-pr_score, -conf[i], recall[:, 0])  # r at pr_score, negative x, xp because xp decreases
 
             # Precision
             precision = tpc / (tpc + fpc)  # precision curve
-            p[ci] = np.interp(-pr_score, -conf[i], precision[:, 0])  # p at pr_score
+            p[ci] = np.int_erp(-pr_score, -conf[i], precision[:, 0])  # p at pr_score
 
             # AP from recall-precision curve
             for j in range(tp.shape[1]):
@@ -228,7 +228,7 @@ def compute_ap(recall, precision):
     method = 'interp'  # methods: 'continuous', 'interp'
     if method == 'interp':
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
-        ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
+        ap = np.trapz(np.int_erp(x, mrec, mpre), x)  # integrate
     else:  # 'continuous'
         i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
@@ -689,7 +689,7 @@ def kmean_anchors(path='./data/coco64.txt', n=9, img_size=(640, 640), thr=0.20, 
 
     # Get label wh
     wh = []
-    dataset = LoadImagesAndLabels(path, augment=True, rect=True)
+    dataset = LoadImagesAndLabels(path, augment=True)
     nr = 1 if img_size[0] == img_size[1] else 10  # number augmentation repetitions
     for s, l in zip(dataset.shapes, dataset.labels):
         wh.append(l[:, 3:5] * (s / s.max()))  # image normalized to letterbox normalized wh
