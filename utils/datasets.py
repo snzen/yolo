@@ -303,7 +303,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.labels = [np.zeros((0, 5), dtype=np.float32)] * n
         create_datasubset, extract_bounding_boxes, labels_loaded = False, False, False
         nm, nf, ne, ns, nd = 0, 0, 0, 0, 0  # number missing, found, empty, datasubset, duplicate
-       
+        np_labels_path = str(Path(self.label_files[0]).parent) + '.npy'  # saved labels in *.npy file
         pbar = tqdm(self.label_files)
         for i, file in enumerate(pbar):
             if labels_loaded:
@@ -323,8 +323,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 assert (l[:, 1:] <= 1).all(), 'non-normalized or out of bounds coordinate labels: %s' % file
                 if np.unique(l, axis=0).shape[0] < l.shape[0]:  # duplicate rows
                     nd += 1  # print('WARNING: duplicate rows in %s' % self.label_files[i])  # duplicate rows
-                if single_cls:
-                    l[:, 0] = 0  # force dataset into single-class mode
                 self.labels[i] = l
                 nf += 1  # file found
 
@@ -364,8 +362,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
             pbar.desc = 'Caching labels %s (%g found, %g missing, %g empty, %g duplicate, for %g images)' % (
                 s, nf, nm, ne, nd, n)
-        assert nf > 0 or n == 20288, 'No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
-        if not labels_loaded and n > 1000:
+        if not labels_loaded:
             print('Saving labels to %s for faster future loading' % np_labels_path)
             np.save(np_labels_path, self.labels)  # save for next time
 

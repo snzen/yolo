@@ -16,7 +16,6 @@ def test(cfg,
          conf_thres=0.001,
          iou_thres=0.6,  # for nms
          save_json=False,
-         single_cls=False,
          augment=False,
          model=None,
          dataloader=None,
@@ -54,7 +53,7 @@ def test(cfg,
 
     # Configure run
     data = parse_data_cfg(data)
-    nc = 1 if single_cls else int(data['classes'])  # number of classes
+    nc = int(data['classes']) 
     path = data['valid']  # path to test images
     names = load_classes(data['names'])  # class names
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
@@ -63,7 +62,7 @@ def test(cfg,
 
     # Dataloader
     if dataloader is None:
-        dataset = LoadImagesAndLabels(path, imgsz, batch_size, rect=True, single_cls=opt.single_cls, pad=0.5)
+        dataset = LoadImagesAndLabels(path, imgsz, batch_size, rect=True, pad=0.5)
         batch_size = min(batch_size, len(dataset))
         dataloader = DataLoader(dataset,
                                 batch_size=batch_size,
@@ -259,7 +258,6 @@ if __name__ == '__main__':
              opt.conf_thres,
              opt.iou_thres,
              opt.save_json,
-             opt.single_cls,
              opt.augment)
 
     elif opt.task == 'benchmark':  # mAPs at 256-640 at conf 0.5 and 0.7
